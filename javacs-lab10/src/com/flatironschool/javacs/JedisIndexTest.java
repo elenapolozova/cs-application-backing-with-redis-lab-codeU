@@ -44,6 +44,7 @@ public class JedisIndexTest {
 	 * @throws IOException
 	 */
 	private static void loadIndex(JedisIndex index) throws IOException {
+		index.deleteAllKeys(); // I think this clears the database entirely. maybe not.
 		WikiFetcher wf = new WikiFetcher();
 
 		url1 = "https://en.wikipedia.org/wiki/Java_(programming_language)";
@@ -68,6 +69,10 @@ public class JedisIndexTest {
 	 */
 	@Test
 	public void testGetCounts() {
+		index.getURLs("the"); // I added this
+		System.out.println("All the url keys in the index: " + index.urlSetKeys()); // I added this
+		System.out.println(index.getCount(url1, "the"));
+		System.out.println(index.getCount(url2, "the"));
 		Map<String, Integer> map = index.getCounts("the");
 		assertThat(map.get(url1), is(339));
 		assertThat(map.get(url2), is(264));

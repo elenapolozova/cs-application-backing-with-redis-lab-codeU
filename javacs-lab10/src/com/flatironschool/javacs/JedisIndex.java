@@ -1,3 +1,16 @@
+// Module 2 implementation had issues bc it depended on "volatile" data
+// (data that was stored only in the memory of a running program)
+// instead, we want our data to be "persistent"
+
+// Redis data structures:
+// --> Lists of Strings, sorta like Java strings
+// --> Hashes, sorta like Java maps
+// --> Sets of Strings, sorta like Java sets
+
+// Redis is a "key-value" database: the data structures it contains (values) are ID'd by unique strings (keys)
+// Basically = a map from keys (strings) to values, which can be several datatypes
+// to look up a key and get its value, use jedis.get("keystring") (jedis.set("mykey", "myvalue"))
+
 package com.flatironschool.javacs;
 
 import java.io.IOException;
@@ -10,6 +23,8 @@ import java.util.HashSet;
 import java.util.List;
 
 import org.jsoup.select.Elements;
+import org.jsoup.nodes.Node;
+import org.jsoup.nodes.TextNode;
 
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Transaction;
@@ -68,7 +83,9 @@ public class JedisIndex {
 	 */
 	public Set<String> getURLs(String term) {
         // FILL THIS IN!
-		return null;
+        System.out.println("GET URLS "+ jedis.smembers(term));
+        System.out.println("GET URLS type "+ jedis.smembers(term).getClass());
+		return jedis.smembers(term);
 	}
 
     /**
@@ -78,8 +95,12 @@ public class JedisIndex {
 	 * @return Map from URL to count.
 	 */
 	public Map<String, Integer> getCounts(String term) {
-        // FILL THIS IN!
-		return null;
+        Set<String> urls = getURLs(term); // all the urls the term appears in
+        HashMap<String, Integer> countsMap = new HashMap<String, Integer>();
+        for (String url: urls){
+        	countsMap.put(url, getCount(url, term)); // add url-count pair to map
+        }
+		return countsMap;
 	}
 
     /**
@@ -90,8 +111,8 @@ public class JedisIndex {
 	 * @return
 	 */
 	public Integer getCount(String url, String term) {
-        // FILL THIS IN!
-		return null;
+		String count = jedis.hget(url, term);
+		return Integer.parseInt(count);
 	}
 
 
@@ -102,8 +123,64 @@ public class JedisIndex {
 	 * @param paragraphs  Collection of elements that should be indexed.
 	 */
 	public void indexPage(String url, Elements paragraphs) {
-        // FILL THIS IN!
+		System.out.println("Indexing " + url);
+        // "make" a TermCounter and fill it with the counts of the terms in the paragraphs
+        // "make" is in quotes bc you don't actually have to make it before you start adding elements
+        Transaction t = jedis.multi();
+        for (Node para: paragraphs) { // for each paragraph
+        	for (Node node: new WikiNodeIterable(para)) { // process each node in the paragraph
+        		if (node instanceof TextNode) {
+        			String text = ((TextNode) node).text();
+        			String[] wordArray = text.replaceAll("\\pP", " ").toLowerCase().split("\\s+");
+        			for (int w=0; w < wordArray.length; w++){
+        				t.hincrBy(url, wordArray[w], 1); // update the word count at that url
+        				t.sadd(wordArray[w], url); // update the urlset of the word		
+    				} // end for that processes every word
+    			} // end if ensuring you process only text nodes 
+    		} // end for that loops through all nodes in the paragraph
+    	} // end for that loops through all paragraphs
+    	t.exec();
+	} // end indexPage
+
+/*
+	private void processText(String text) {
+		// replace punctuation with spaces, convert to lower case, and split on whitespace
+		String[] array = text.replaceAll("\\pP", " ").toLowerCase().split("\\s+");
+		
+		for (int i=0; i<array.length; i++) {
+			String term = array[i];
+			incrementTermCount(term);
+		}
 	}
+
+
+*
+	public void processTree(Node root) {
+// NOTE: we could use select to find the TextNodes, but since
+		// we already have a tree iterator, let's use it.
+		for (Node node: new WikiNodeIterable(root)) {
+			if (node instanceof TextNode) {
+				processText(((TextNode) node).text());
+			}
+		}
+
+	public void processElements(Elements paragraphs) { TermCounter method
+		for (Node node: paragraphs) {
+			processTree(node);
+		}
+	}
+
+	public void indexPage(String url, Elements paragraphs) {
+		// make a TermCounter and count the terms in the paragraphs
+		TermCounter tc = new TermCounter(url);
+		tc.processElements(paragraphs);
+		
+		// for each term in the TermCounter, add the TermCounter to the index
+		for (String term: tc.keySet()) {
+			add(term, tc);
+		}
+	}
+*/
 
 	/**
 	 * Prints the contents of the index.
